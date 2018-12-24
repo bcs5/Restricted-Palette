@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>Color Tool</title>
+		<link href="css/bootstrap.min.css" rel="stylesheet">
+		<link href="style.css" rel="stylesheet">
+		<script src="js/bootstrap.min.js"></script>
+	</head>
+	<body>
+		<div class="container">
+			<h1>Color Tool</h1>
+			<div class = "row" style="margin-bottom:50px;margin-top:50px">
+				<div class="col-md-6">
+					<canvas id="canvas"></canvas>
+				</div>
+				<div class="col-md-6">
+					<form style="margin-bottom:50px;">
+						<div class="custom-file">
+						  <input type="file" class="custom-file-input" id="imgload" >
+						  <label class="custom-file-label" for="customFile">Choose file</label>
+						</div>
+					</form>		
+					<button id="grayscalebtn" type="button" class="btn btn-primary">Grayscale</button>
+					<button id="invertbtn" type="button" class="btn btn-primary">Invert</button>
+					<button id="x86btn" type="button" class="btn btn-primary">to x86</button>
+					<a download="img.txt" id="downloadlink" style="display: none">img.txt</a>
+				</div>
+			</div>
+			<div class="card">
+			  <div class="card-body">
+			  	<div class="alert alert-warning" role="alert">
+					<ul>
+						<li>Resize the image to 255 x 200(this has 51000 bytes) or less.</li>
+						<li>ASM x86 has a palette of 16 colors.</li>
+					</ul>
+				</div>
+				<samp>
+					<p>width, height,</p>
+					<p>pixel(0, 0), [...], pixel(width, 0),</p>
+					<p>[...],</p>
+					<p>pixel(0, h), [...], pixel(width, height)</p>
+				
+					<a href="bootimg.zip">bootimg.zip</a>
+				</samp>
+			  </div>
+			</div>
+			<div style="margin-top:50px;">
+				<h2>Links</h2>
+				<p><a href = "https://en.wikipedia.org/wiki/Color_difference">https://en.wikipedia.org/wiki/Color_difference</a></p>
+				<p><a href = "https://en.wikipedia.org/wiki/BIOS_color_attributes">https://en.wikipedia.org/wiki/BIOS_color_attributes</a></p>
+			</div>
+		</div>
+		<style>
+			canvas {
+			  image-rendering: -moz-crisp-edges;
+			  image-rendering: -webkit-crisp-edges;
+			  image-rendering: pixelated;
+			  image-rendering: crisp-edges;
+			}
+		</style>
+		<script type="text/javascript">
+			var arrHEX = [
+				"#000000", "#0000AA", "#00AA00", "#00AAAA",
+				"#AA0000", "#AA00AA", "#AA5500", "#AAAAAA",
+				"#555555", "#5555FF", "#55FF55", "#55FFFF",
+				"#FF5555", "#FF55FF", "#FFFF55", "#FFFFFF"
+			];
+			var arrRGB = [
+				[0,0,0], [0,0,170], [0,170,0], [0,170,170],
+				[170,0,0], [170,0,170], [170,85,0], [170,170,170],
+				[85,85,85], [85,85,255], [85,255,85], [85,255,255],
+				[255,85,85], [255,85,255], [255,255,85], [255,255,255]
+			];
+			document.getElementById('imgload').onchange = function (evt) {
+				var img = new Image();
+				img.src = URL.createObjectURL(evt.target.files[0]);
+				img.onload = function() {
+					draw(this);
+				}
+			}
+			
+			var textFile = null, makeTextFile = function (text) {
+				var data = new Blob([text], {type: 'text/plain'});
+				if (textFile !== null) {
+					window.URL.revokeObjectURL(textFile);
+				}
+				textFile = window.URL.createObjectURL(data);
+				return textFile;
+			};
+			function draw(img) {
+				var canvas = document.getElementById('canvas');
+				var ctx = canvas.getContext('2d');
+				ctx.clearRect(0, 0, canvas.width, canvas.height);
+				console.log(img);
+				canvas.height = img.height;
+				canvas.width = img.width;
+				
+				ctx.drawImage(img, 0, 0);
+				
+				img.style.display = 'none';
+				var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+				var data = imageData.data;
+				var link = document.getElementById('downloadlink');
+				var invert = function() {
+					link.style.display = 'none';
+					for (var i = 0; i < data.length; i += 4) {
+						data[i]     = 255 - data[i];     // red
+						data[i + 1] = 255 - data[i + 1]; // green
+						data[i + 2] = 255 - data[i + 2]; // blue
+					}
+					ctx.putImageData(imageData, 0, 0);
+				};
+				var x86 = function() {
+					var ans = [];
+					ans.push(imageData.width);
+					ans.push(imageData.height);
+					for (var i = 0; i < data.length; i += 4) {
+						var best;
+						var dist = 3*256*256;
+						for(var j = 0; j < 16; j++){
+							var dr = arrRGB[j][0] - data[i];
+							var dg = arrRGB[j][1] - data[i + 1];
+							var db = arrRGB[j][2] - data[i + 2];
+							var currdist = 2*dr*dr + 4*dg*dg + 3*db*db;
+							if(currdist < dist){
+								best = j;
+								dist = currdist;
+							}
+						}
+						data[i] = arrRGB[best][0];
+						data[i + 1] = arrRGB[best][1];
+						data[i + 2] = arrRGB[best][2];
+						ans.push(best);
+					}
+					ctx.putImageData(imageData, 0, 0);
+					var str = "";
+					for(var i = 0; i < ans.length; i++){
+						if(i) str += ", ";
+						str += ans[i];
+					}
+					
+					link.href = makeTextFile(str);
+					link.style.display = 'block';
+				};
+				var grayscale = function() {
+					link.style.display = 'none';
+					for (var i = 0; i < data.length; i += 4) {
+						var avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+						data[i]     = avg; // red
+						data[i + 1] = avg; // green
+						data[i + 2] = avg; // blue
+					}
+					ctx.putImageData(imageData, 0, 0);
+				};
+
+				var invertbtn = document.getElementById('invertbtn');
+				invertbtn.addEventListener('click', invert);
+				var grayscalebtn = document.getElementById('grayscalebtn');
+				grayscalebtn.addEventListener('click', grayscale);
+				var x86btn = document.getElementById('x86btn');
+				x86btn.addEventListener('click', x86);
+			}
+			
+		</script>
+	</body>
+</html>
